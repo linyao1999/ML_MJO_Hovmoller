@@ -1,0 +1,56 @@
+model:
+  name: "CNN_MLP"
+  cnn:
+    name: "CNN"  # Name of the model
+    input_channel_num: 1  # Number of input channels (e.g., RGB images have 3 channels)
+    channels_list: [32,8]  # Number of channels in the first hidden layer
+    kernel_size: 3  # Size of the convolutional kernel
+    stride: 1  # Stride for the convolution
+    padding: "same"  # Padding type ('same' or integer)
+    dropout: 0.1  # Dropout rate for regularization
+    batch_norm: true  # Whether to use batch normalization
+    input_map_size: 2448  # the size of input map nlat x nlon
+  mlp:
+    hidden_layers: [512, 64]
+    output_size: 2
+    dropout: 0.5
+
+# training:
+#   batch_size: 32
+#   epochs: 20
+#   optimizer: "Adam"
+#   criterion: "MSELoss"
+#   learning_rate: 0.0005
+#   scheduler:
+#     type: "CosineAnnealingLR"
+
+training:
+  batch_size: 32
+  epochs: 20
+  optimizer: "SGD"
+  criterion: "MSELoss"
+  learning_rate: 0.01
+  momentum: 0.9
+  weight_decay: 0.005
+  scheduler:
+    type: "CosineAnnealingLR"
+
+model_save_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/modelcheckpoints/test/test_CNN_MLP.pth
+prediction_save_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/predictions/test/test_CNN_MLP.nc
+
+data:
+  input_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/processed/test/olr.anopls.mean.nc
+  target_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/test/ROMI_NOAA_1979to2022.nc
+  input_vars: ['olr']
+  target_vars: ['ROMI']
+  train_start: '1979-01-01'
+  train_end: '2014-12-31'
+  val_start: '2015-01-01'
+  val_end: '2019-12-31'
+  test_start: '2020-01-01'
+  test_end: '2023-12-31'
+  lead: 25
+  lat_range: 20
+  transform: null
+
+
