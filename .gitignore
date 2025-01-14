@@ -1,0 +1,6 @@
+*.nc
+*.pth
+__pycache__/
+debug*
+*.pt 
+*.log
