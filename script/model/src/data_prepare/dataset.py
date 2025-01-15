@@ -82,7 +82,7 @@ class MapDataset(Dataset):
         return input, target
 
 class HovDataset(Dataset):
-    def __init__(self, input_path, target_path, date_start, date_end, lead, memory_list, 
+    def __init__(self, input_path, target_path, date_start, date_end, lead, memory_last, 
                  lat_range=10, transform=None):
         """
         Args:
@@ -91,7 +91,7 @@ class HovDataset(Dataset):
             date_start (str): Start date in 'YYYY-MM-DD' format.
             date_end (str): End date in 'YYYY-MM-DD' format.
             lead (int): Lead time in days for the target variable.
-            memory_list (list): List of time steps to use for the input data.
+            memory_last (int): Last time steps to use for the input data.
             lat_range (int): Latitude range to use for average.
             transform (callable, optional): Optional transform to apply to the data.
         """
@@ -101,7 +101,7 @@ class HovDataset(Dataset):
 
 
         # Define the target data shifted by the lead time
-        date_start_date = datetime.strptime(date_start, "%Y-%m-%d") + timedelta(days=int(memory_list[-1]))
+        date_start_date = datetime.strptime(date_start, "%Y-%m-%d") + timedelta(days=int(memory_last))
         date_end_date = datetime.strptime(date_end, "%Y-%m-%d")
         target_start_date = date_start_date + timedelta(days=lead)
         target_end_date = date_end_date + timedelta(days=lead)
@@ -115,7 +115,8 @@ class HovDataset(Dataset):
         # Load input data
         input_wmem_values = []
 
-        memory_list = np.asarray(memory_list).astype(int)
+        # memory_list = np.asarray(memory_list).astype(int)
+        memory_list = np.arange(0, memory_last+1)
 
         for mem in memory_list[::-1]:
             date_wmem_start = date_start_date - timedelta(days=int(mem))
@@ -194,7 +195,7 @@ def load_train_data(config, dataset_type="map"):
     elif dataset_type == "hov":
         train_data = HovDataset(config["data"]["input_path"], config["data"]["target_path"],
                                 config["data"]["train_start"], config["data"]["train_end"], 
-                                config["data"]["lead"], config["data"]["memory_list"], 
+                                config["data"]["lead"], config["data"]["memory_last"], 
                                 config["data"]["lat_range"], config["data"]["transform"])
 
         # Create data loaders
@@ -213,7 +214,7 @@ def load_val_data(config, dataset_type="map"):
     elif dataset_type == "hov": 
         val_data = HovDataset(config["data"]["input_path"], config["data"]["target_path"],
                               config["data"]["val_start"], config["data"]["val_end"], 
-                              config["data"]["lead"], config["data"]["memory_list"], 
+                              config["data"]["lead"], config["data"]["memory_last"], 
                               config["data"]["lat_range"], config["data"]["transform"])
         # Create data loaders
         val_loader = DataLoader(val_data, batch_size=config["training"]["batch_size"], shuffle=False)

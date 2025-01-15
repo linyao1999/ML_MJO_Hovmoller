@@ -5,14 +5,14 @@ model:
     input_channel_num: 1  # Number of input channels (e.g., RGB images have 3 channels)
     channels_list: [32,8]  # Number of channels in the first hidden layer
     # kernel_size: 3  # Size of the convolutional kernel
-    kernel_size: 36  # Size of the convolutional kernel
+    kernel_size: 5  # Size of the convolutional kernel
     stride: 1  # Stride for the convolution
     padding: "same"  # Padding type ('same' or integer)
     dropout: 0.1  # Dropout rate for regularization
     batch_norm: true  # Whether to use batch normalization
     nlon: 144  # the size of input map nlon
   mlp:
-    hidden_layers: [2048,]
+    hidden_layers: [1024, 128]
     output_size: 2
     dropout: 0.3
 

@@ -2,7 +2,7 @@ from multiprocessing import Semaphore, Pool
 import subprocess
 
 # Allocate interactive session
-# Example: salloc --nodes 1 --qos interactive --time 02:00:00 --constraint gpu --gpus 4 --account=m4736_g
+# Example: salloc --nodes 1 --qos interactive --time 02:00:00 --constraint gpu --gpus 4 --account=dasrepo_g
 
 max_jobs = 4  # Limit concurrent jobs to 4 (adjust based on resources)
 semaphore = Semaphore(max_jobs)
@@ -13,26 +13,27 @@ lead_times = list(range(0, 31, 5))  # [0, 5, 10, ..., 30]
 # Define hyperparameters for HPO
 learning_rates = [0.001, 0.005]
 batch_sizes = [32, 64]
-dropouts = [0.1, 0.2]
-epochs = [10, 20]
-optimizers = ["SGD", "Adam"]
-momentum = [0.9]
-weight_decay = [0.0001, 0.001]
+dropouts = [0.1, 0.3, 0.5]
+epochs = [20,]
+optimizers = ["SGD",]
+momentum = [0.9,]
+weight_decay = [0.001, 0.005]
 lat_ranges = [10, 20]
-memory_lasts = [5, 10]
-kernel_sizes = [3, 5]
+memory_lasts = [95, 29]
+kernel_sizes = [25, 13, 7, 3]
+exp_nums = [1,]
 
 # Generate all combinations of hyperparameters
 from itertools import product
 
 hyperparameter_combinations = list(product(
     lead_times, learning_rates, batch_sizes, dropouts, epochs, optimizers,
-    momentum, weight_decay, lat_ranges, memory_lasts, kernel_sizes
+    momentum, weight_decay, lat_ranges, memory_lasts, kernel_sizes, exp_nums
 ))
 
 # Function to run a single job
 def run_job(params):
-    lead, lr, batch_size, dropout, epochs, optimizer, momentum, wd, lat_range, memory_last, kernel_size = params
+    lead, lr, batch_size, dropout, epochs, optimizer, momentum, wd, lat_range, memory_last, kernel_size, exp_num = params
     command = (
         f"python single_hovmoller.py "
         f"--lead {lead} "
@@ -46,6 +47,7 @@ def run_job(params):
         f"--lat_range {lat_range} "
         f"--memory_last {memory_last} "
         f"--kernel_size {kernel_size}"
+        f"--exp_num {exp_num}"
     )
     with semaphore:
         print(f"Starting job with command: {command}")

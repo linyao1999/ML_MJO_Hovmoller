@@ -180,7 +180,7 @@ def generate_fn_list(base_dir, lead_list=[0,], exp_list=['1',], lat=20, lr=0.01,
             # print(f"Looking for files with lead {lead} in {exp_dir}")
             for file in os.listdir(exp_dir):
                 # Use fnmatch for pattern matching
-                if fnmatch.fnmatch(file, f"*{fileflg}{lat}deg*lead{lead}*lr{lr}*batch{batch_size}*mem{mem}.nc"):
+                if fnmatch.fnmatch(file, f"*{fileflg}{lat}deg*lead{lead}*lr{lr}*batch{batch_size}*mem{mem}*.nc"):
                     file_found = os.path.join(exp_dir, file)
                     # print(f"Matched file: {file_found}")
                     break

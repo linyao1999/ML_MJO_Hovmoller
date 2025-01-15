@@ -28,7 +28,7 @@ def main(
     # Load configuration
     config_path = "config/config_hovmoller.yaml"
     config = load_config(config_path)
-
+    
     # Update configuration with provided parameters
     config["data"]["lead"] = lead
     config["training"]["learning_rate"] = lr or config["training"]["learning_rate"]
