@@ -1,7 +1,7 @@
 from multiprocessing import Semaphore
 import subprocess
 
-# salloc --nodes 1 --qos interactive --time 02:00:00 --constraint gpu --gpus 4 --account=m4736_g
+# salloc --nodes 1 --qos interactive --time 03:10:00 --constraint gpu --gpus 4 --account=m3312_g
 
 max_jobs = 4  # Limit concurrent jobs to 4 (adjust based on resources)
 semaphore = Semaphore(max_jobs)

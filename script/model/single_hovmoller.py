@@ -3,6 +3,7 @@ import os
 import argparse
 from src.data_prepare.dataset import load_config, load_val_data, load_train_data, get_time_dimension
 from src.models.cnnmlp import CNNMLP
+from src.models.unet import UNet_A
 from src.trainers.train import train_model
 from src.inference.predict import predict
 from src.utils.logger import setup_logger
@@ -24,11 +25,15 @@ def main(
     lat_range=None,
     memory_last=None,
     kernel_size=None,
+    model_name=None
 ):
     # Load configuration
     config_path = "config/config_hovmoller.yaml"
     config = load_config(config_path)
     
+    print(config["model"]["cnn"]["kernel_size"])
+    print(kernel_size)
+
     # Update configuration with provided parameters
     config["data"]["lead"] = lead
     config["training"]["learning_rate"] = lr or config["training"]["learning_rate"]
@@ -41,7 +46,18 @@ def main(
     config["exp_num"] = exp_num or config["exp_num"]
     config["data"]["lat_range"] = lat_range or config["data"]["lat_range"]
     config["data"]["memory_last"] = memory_last or config["data"]["memory_last"]
-    config["model"]["cnn"]["kernel_size"] = kernel_size or config["model"]["cnn"]["kernel_size"]
+    config["model"]["name"] = model_name or config["model"]["name"]
+    # config["model"]["cnn"]["kernel_size"] = kernel_size or config["model"]["cnn"]["kernel_size"]
+
+    kernel_size_str = kernel_size or config["model"]["cnn"]["kernel_size"]
+
+    print('kernel_size_str:', kernel_size_str)
+    print('len: kernel_size_str:', len(kernel_size_str))
+    if len(kernel_size_str) <= 2:
+        config["model"]["cnn"]["kernel_size"] = [int(kernel_size_str), int(kernel_size_str)]
+    else:
+        k1, k2 = map(int, kernel_size_str.split('_'))
+        config["model"]["cnn"]["kernel_size"] = [k1, k2]
 
     config["model"]["cnn"]["input_map_size"] = config["model"]["cnn"]["nlon"] * (1 + config["data"]["memory_last"])
     config['channels_list_str'] = '_'.join(map(str, config["model"]["cnn"]['channels_list']))
@@ -56,12 +72,13 @@ def main(
         batch_size=config["training"]["batch_size"],
         dropout=config["model"]["mlp"]["dropout"],
         channels_list_str=config["channels_list_str"],
-        kernel_size=config["model"]["cnn"]["kernel_size"],
+        kernel_size=kernel_size_str,
         hidden_layers_str=config["hidden_layers_str"],
         optimizer=config["training"]["optimizer"],
         momentum=config["training"]["momentum"],
         weight_decay=config["training"]["weight_decay"],
-        memory_last=config["data"]["memory_last"]
+        memory_last=config["data"]["memory_last"],
+        model_name=config["model"]["name"]
     )
 
     config["prediction_save_path"] = config["prediction_save_path"].format(
@@ -73,12 +90,13 @@ def main(
         batch_size=config["training"]["batch_size"],
         dropout=config["model"]["mlp"]["dropout"],
         channels_list_str=config["channels_list_str"],
-        kernel_size=config["model"]["cnn"]["kernel_size"],
+        kernel_size=kernel_size_str,
         hidden_layers_str=config["hidden_layers_str"],
         optimizer=config["training"]["optimizer"],
         momentum=config["training"]["momentum"],
         weight_decay=config["training"]["weight_decay"],
-        memory_last=config["data"]["memory_last"]
+        memory_last=config["data"]["memory_last"],
+        model_name=config["model"]["name"]
     )
 
     if config["pretrained_path"] is not None:
@@ -91,24 +109,29 @@ def main(
             batch_size=config["training"]["batch_size"],
             dropout=config["model"]["mlp"]["dropout"],
             channels_list_str=config["channels_list_str"],
-            kernel_size=config["model"]["cnn"]["kernel_size"],
+            kernel_size=kernel_size_str,
             hidden_layers_str=config["hidden_layers_str"],
             optimizer=config["training"]["optimizer"],
             momentum=config["training"]["momentum"],
             weight_decay=config["training"]["weight_decay"],
-            memory_last=config["data"]["memory_last"]
+            memory_last=config["data"]["memory_last"],
+            model_name=config["model"]["name"]
         )
 
     print(f"Configuration: {config}")
 
     # Load the data
-    train_loader = load_train_data(config, dataset_type='hov')
-    val_loader = load_val_data(config, dataset_type='hov')
+    train_loader = load_train_data(config, dataset_type=config["dataset_type"])
+    val_loader = load_val_data(config, dataset_type=config["dataset_type"])
 
     # Initialize model
     cnn_config = config["model"]["cnn"]
     mlp_config = config["model"]["mlp"]
-    model = CNNMLP(cnn_config, mlp_config)
+
+    if config["model"]["name"] == "CNN_MLP":
+        model = CNNMLP(cnn_config, mlp_config)
+    elif config["model"]["name"] == "UNet_A":
+        model = UNet_A(cnn_config, mlp_config)
 
     # Train the model
     logger.info(f"Starting training for lead={lead}...")
@@ -160,10 +183,11 @@ if __name__ == "__main__":
     parser.add_argument("--optimizer", type=str, required=False, choices=["SGD", "Adam"], help="Optimizer type.")
     parser.add_argument("--momentum", type=float, required=False, help="Momentum for SGD optimizer.")
     parser.add_argument("--weight_decay", type=float, required=False, help="Weight decay for regularization.")
-    parser.add_argument("--exp_num", type=int, help="experiment number")
-    parser.add_argument("--lat_range", type=int, help="latitude range")
-    parser.add_argument("--memory_last", type=int, help="Time steps to consider in the past")
-    parser.add_argument("--kernel_size", type=int, help="Kernel size for CNN.")
+    parser.add_argument("--exp_num", type=int, required=False, help="experiment number")
+    parser.add_argument("--lat_range", type=int, required=False, help="latitude range")
+    parser.add_argument("--memory_last", type=int, required=False, help="Time steps to consider in the past")
+    parser.add_argument("--kernel_size", type=str, required=False, help="Kernel size for CNN.")
+    parser.add_argument("--model_name", type=str, required=False, help="Model name to use for training.")
 
     args = parser.parse_args()
 
@@ -179,7 +203,8 @@ if __name__ == "__main__":
         exp_num=args.exp_num,
         lat_range=args.lat_range,
         memory_last=args.memory_last,
-        kernel_size=args.kernel_size
+        kernel_size=args.kernel_size,
+        model_name=args.model_name
     )
 
 

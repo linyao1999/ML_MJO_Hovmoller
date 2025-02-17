@@ -77,6 +77,8 @@ def train_model(model, train_loader, val_loader, config):
 
             running_loss += loss.item()  # Accumulate loss
 
+            # print(f"Batch Loss: {loss.item():.4f}")
+
         train_loss = running_loss / len(train_loader)
 
         # Validation loop

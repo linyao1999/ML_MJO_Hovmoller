@@ -67,7 +67,7 @@ def get_phase_amp(mjo_ind, datasta, dataend,
 
     return phase, amp
 
-def get_skill_one(mjo_ind, fn, rule='Iamp>1.0', month_list=None,
+def get_skill_one(mjo_ind, fn, rule='Iamp>1.0', month_list=None, datesta=None, dateend=None,
                        Fnmjo = '/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc'):
     # mjo_ind: the index of MJO
     # fn: prediction file 
@@ -75,11 +75,26 @@ def get_skill_one(mjo_ind, fn, rule='Iamp>1.0', month_list=None,
     # month_list: the list of months to select the data
     # Fnmjo: original target file 
 
-    ds = xr.open_dataset(fn)
-    datesta = ds.time[0].values
-    dateend = ds.time[-1].values
+    ds0 = xr.open_dataset(fn)
+    if datesta is None:
+        datesta = ds0.time[0].values
+    else:
+        # find the latest datesta
+        datesta = max(np.datetime64(datesta), np.datetime64(ds0.time[0].values))
 
+
+    if dateend is None:
+        dateend = ds0.time[-1].values
+    else:
+        # find the earliest dateend
+        dateend = min(np.datetime64(dateend), np.datetime64(ds0.time[-1].values))
+
+    ds = ds0.sel(time=slice(datesta, dateend))
+    # print('time: ', ds.dims['time'])
+    # print('datesta: ', datesta)
+    # print('dateend: ', dateend)
     phase, amp = get_phase_amp(mjo_ind=mjo_ind, datasta=datesta, dataend=dateend, Fnmjo=Fnmjo)
+    # print('phase: ', phase.shape)
     ds['iphase'] = xr.DataArray(phase, dims=['time'], attrs={'long_name': 'initial phase of MJO'})
     ds['iamp'] = xr.DataArray(amp, dims=['time'], attrs={'long_name': 'initial amplitude of MJO'})
     # # target phase and amplitude
@@ -165,7 +180,7 @@ def get_skill_parallel(mjo_ind, fn_list={}, rule='Iamp>1.0', month_list=None, le
                 
     return bcc_list, rmse_list
 
-def generate_fn_list(base_dir, lead_list=[0,], exp_list=['1',], lat=20, lr=0.01, batch_size=64, mem=29, fileflg=''):
+def generate_fn_list(base_dir, lead_list=[0,], exp_list=['1',], lat=15, fileflg='*.nc'):
     fn_list = {}
     
     for exp_num in exp_list:
@@ -180,7 +195,7 @@ def generate_fn_list(base_dir, lead_list=[0,], exp_list=['1',], lat=20, lr=0.01,
             # print(f"Looking for files with lead {lead} in {exp_dir}")
             for file in os.listdir(exp_dir):
                 # Use fnmatch for pattern matching
-                if fnmatch.fnmatch(file, f"*{fileflg}{lat}deg*lead{lead}*lr{lr}*batch{batch_size}*mem{mem}*.nc"):
+                if fnmatch.fnmatch(file, f"OLR_{lat}deg_lead{lead}_{fileflg}"):
                     file_found = os.path.join(exp_dir, file)
                     # print(f"Matched file: {file_found}")
                     break
@@ -191,3 +206,95 @@ def generate_fn_list(base_dir, lead_list=[0,], exp_list=['1',], lat=20, lr=0.01,
                 print(f"No matching file for lead {lead}, experiment {exp_num} in {exp_dir}")
     
     return fn_list
+
+
+def generate_fn_list_hpo(
+    base_dir='/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/predictions/hovmoller/epo20/exp1',
+    lead_list=[0,],
+    lat_ranges = [10, 15],
+    learning_rates=[0.001, 0.005],
+    batch_sizes=[32, 64],
+    dropouts=[0.1, 0.3, 0.5],
+    epochs=[20,],
+    optimizers=["SGD",],
+    momentum=[0.9,],
+    weight_decay=[0.001, 0.005],
+    memory_lasts=[95, 29],
+    kernel_sizes=[25, 13, 7, 3],
+    channels_list_strs=["32_8",],
+    hidden_layers_strs=["1024_128",]):
+
+    fn_list = []
+
+    for lat in lat_ranges:
+        for lr in learning_rates:
+            for bs in batch_sizes:
+                for do in dropouts:
+                    for ep in epochs:
+                        for opt in optimizers:
+                            for mom in momentum:
+                                for wd in weight_decay:
+                                    for ml in memory_lasts:
+                                        for ks in kernel_sizes:
+                                            for channels_list_str in channels_list_strs:
+                                                for hidden_layers_str in hidden_layers_strs:
+                                                    for lead in lead_list:
+                                                        fn = f"{base_dir}/OLR_{lat}deg_lead{lead}_lr{lr}_batch{bs}_dropout{do}_ch_{channels_list_str}_ksize_{ks}_hidden_{hidden_layers_str}_opt_{opt}_mom{mom}_wd{wd}_mem{ml}.nc"
+                                                        fn_list.append(fn)
+
+    return fn_list
+    
+def compute_skill_for_hpo(args):
+    mjo_ind, fn, rule, month_list, datesta, dateend = args
+    bcc, rmse = get_skill_one(mjo_ind, fn, rule=rule, month_list=month_list, datesta=datesta, dateend=dateend)
+    return {fn: bcc}, {fn: rmse}
+
+def get_skill_hpo_exp1(
+    mjo_ind='ROMI',
+    datesta='2015-01-01',
+    dateend='2018-12-31',
+    rule= 'Iamp>1.0',
+    month_list=None,
+    base_dir='/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/predictions/hovmoller/epo20/exp',
+    exp = 1,
+    lead_list=[0,],
+    lat_ranges = [10, 15],
+    learning_rates=[0.001, 0.005],
+    batch_sizes=[32, 64],
+    dropouts=[0.1, 0.3, 0.5],
+    epochs=[20,],
+    optimizers=["SGD",],
+    momentum=[0.9,],
+    weight_decay=[0.001, 0.005],
+    memory_lasts=[95, 29],
+    kernel_sizes=[25, 13, 7, 3],
+    channels_list_strs=["32_8",],
+    hidden_layers_strs=["1024_128",]):
+
+    bcc_list = {}
+    rmse_list = {}
+
+    for lead in lead_list:
+        # Generate the list of file paths for HPO configurations at a given lead time and experiment number
+        fn_list_hpo = generate_fn_list_hpo(base_dir=f'{base_dir}{exp}', lead_list=[lead,], lat_ranges=lat_ranges, learning_rates=learning_rates,
+                                            batch_sizes=batch_sizes, dropouts=dropouts, epochs=epochs, optimizers=optimizers,
+                                            momentum=momentum, weight_decay=weight_decay, memory_lasts=memory_lasts, kernel_sizes=kernel_sizes,
+                                            channels_list_strs=channels_list_strs, hidden_layers_strs=hidden_layers_strs)    
+
+
+        bcc_list[(lead, exp)] = []
+        rmse_list[(lead, exp)] = []
+
+        # Use ProcessPoolExecutor to parallelize the computation
+        with ProcessPoolExecutor() as executor:
+            args_list = [(mjo_ind, fn, rule, month_list, datesta, dateend) for fn in fn_list_hpo]
+            results = list(executor.map(compute_skill_for_hpo, args_list))
+
+        # Collect the results from the parallel computation
+        for bcc, rmse in results:
+            bcc_list[(lead, exp)].append(bcc)
+            rmse_list[(lead, exp)].append(rmse)
+
+    return bcc_list, rmse_list
+
+    

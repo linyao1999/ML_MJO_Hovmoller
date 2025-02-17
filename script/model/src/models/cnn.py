@@ -1,5 +1,33 @@
 import torch.nn as nn
 
+class CNN_one(nn.Module):
+    def __init__(self, input_channel_num, output_channel_num, kernel_size=5, 
+                 stride=1, padding='same', dropout=0.2, batch_norm=True):
+        super(CNN_one, self).__init__()
+
+        layers = []
+        layers.append(
+            nn.Conv2d(
+                in_channels=input_channel_num,
+                out_channels=output_channel_num,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding
+            )
+        )
+
+        if batch_norm:
+            layers.append(nn.BatchNorm2d(output_channel_num))
+        
+        layers.append(nn.ReLU())
+
+        layers.append(nn.Dropout2d(dropout))
+
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.network(x)
+
 class CNN(nn.Module):
     def __init__(self, input_channel_num, channels_list, kernel_size=5, 
                  stride=1, padding='same', dropout=0.2, batch_norm=True):
@@ -18,6 +46,8 @@ class CNN(nn.Module):
         
         layers = []
         in_channels = input_channel_num
+
+        print('kernel_size:', kernel_size)
         
         for out_channels in channels_list:
             # Add convolutional layer

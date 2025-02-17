@@ -12,7 +12,7 @@ class CNNMLP(nn.Module):
           {
               "input_channel_num": 3,
               "channels_list": [16, 32, 64],
-              "kernel_size": 3,
+              "kernel_size": [3,3] or [5,40]
               "stride": 1,
               "padding": 1,
               "dropout": 0.1,
@@ -30,10 +30,12 @@ class CNNMLP(nn.Module):
         super(CNNMLP, self).__init__()
 
         # Initialize the CNN
+        kernel_size_list = cnn_config.get("kernel_size", [5,5])
+        print('kernel_size_list:', kernel_size_list)
         self.cnn = CNN(
             input_channel_num=cnn_config["input_channel_num"],
             channels_list=cnn_config["channels_list"],
-            kernel_size=cnn_config.get("kernel_size", 5),
+            kernel_size=(kernel_size_list[0], kernel_size_list[1]),
             stride=cnn_config.get("stride", 1),
             padding=cnn_config.get("padding", 'same'),
             dropout=cnn_config.get("dropout", 0.2),
