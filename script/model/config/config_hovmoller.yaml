@@ -1,21 +1,22 @@
-dataset_type: "hov_two"
+# dataset_type: "hov_two"
+dataset_type: "hov_two_allleads"
 
 model:
   name: "UNet_A"
   cnn:
     name: "CNN"  # Name of the model
-    input_channel_num: 3  # Number of input channels (e.g., RGB images have 3 channels)
-    channels_list: [16,4]  # Number of channels in the first hidden layer
+    input_channel_num: 2  # Number of input channels (e.g., RGB images have 3 channels)
+    channels_list: [32,8]  # Number of channels in the first hidden layer
     # kernel_size: 3  # Size of the convolutional kernel
-    kernel_size: "5"  # Size of the convolutional kernel
+    kernel_size: "3"  # Size of the convolutional kernel
     stride: 1  # Stride for the convolution
     padding: "same"  # Padding type ('same' or integer)
     dropout: 0.1  # Dropout rate for regularization
     batch_norm: false  # Whether to use batch normalization
     nlon: 144  # the size of input map nlon
   mlp:
-    hidden_layers: [512, 64]
-    output_size: 2
+    hidden_layers: [1024, 128]
+    output_size: 62
     dropout: 0.3
 
 # training:
@@ -29,10 +30,10 @@ model:
 
 training:
   batch_size: 32
-  epochs: 30
+  epochs: 20
   optimizer: "SGD"
   criterion: "MSELoss"
-  learning_rate: 0.0001
+  learning_rate: 0.001
   momentum: 0.9
   weight_decay: 0.001
   scheduler:
@@ -64,5 +65,5 @@ channels_list_str: "32_8_2"
 hidden_layers_str: "2048_256"
 
 pretrained_path: null 
-model_save_path: "/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/modelcheckpoints/hovmoller/{model_name}/exp{exp_num}/OLR_{lat_range}deg_lead{lead}_lr{lr}_batch{batch_size}_dropout{dropout}_ch_{channels_list_str}_ksize_{kernel_size}_hidden_{hidden_layers_str}_opt_{optimizer}_mom{momentum}_wd{weight_decay}_mem{memory_last}.pth"
-prediction_save_path: "/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/predictions/hovmoller/{model_name}/exp{exp_num}/OLR_{lat_range}deg_lead{lead}_lr{lr}_batch{batch_size}_dropout{dropout}_ch_{channels_list_str}_ksize_{kernel_size}_hidden_{hidden_layers_str}_opt_{optimizer}_mom{momentum}_wd{weight_decay}_mem{memory_last}.nc"
+model_save_path: "/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/modelcheckpoints/hov2/{model_name}/exp{exp_num}/OLR_{lat_range}deg_lead{lead}_lr{lr}_batch{batch_size}_dropout{dropout}_ch_{channels_list_str}_ksize_{kernel_size}_hidden_{hidden_layers_str}_opt_{optimizer}_mom{momentum}_wd{weight_decay}_mem{memory_last}.pth"
+prediction_save_path: "/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/predictions/hov2/{model_name}/exp{exp_num}/OLR_{lat_range}deg_lead{lead}_lr{lr}_batch{batch_size}_dropout{dropout}_ch_{channels_list_str}_ksize_{kernel_size}_hidden_{hidden_layers_str}_opt_{optimizer}_mom{momentum}_wd{weight_decay}_mem{memory_last}.nc"

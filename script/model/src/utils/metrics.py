@@ -137,12 +137,12 @@ def get_skill_one(mjo_ind, fn, rule='Iamp>1.0', month_list=None, datesta=None, d
 
     return bcc, rmse
 
-def compute_get_skill_one(mjo_ind, fn, rule='Iamp>1.0', month_list=None, lead=0, exp_num='1',
+def compute_get_skill_one(mjo_ind, fn, rule='Iamp>1.0', month_list=None, lead=0, exp_num='1', datesta='2015-01-01', dateend='2018-12-31',
                           Fnmjo='/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc'):    
-    bcc, rmse = get_skill_one(mjo_ind, fn, rule=rule, month_list=month_list, Fnmjo=Fnmjo)
+    bcc, rmse = get_skill_one(mjo_ind, fn, rule=rule, month_list=month_list, Fnmjo=Fnmjo, datesta=datesta, dateend=dateend)
     return (lead, exp_num), {'bcc': bcc, 'rmse': rmse}
 
-def get_skill_parallel(mjo_ind, fn_list={}, rule='Iamp>1.0', month_list=None, lead_list=[0,], exp_list=['1',],
+def get_skill_parallel(mjo_ind, datesta='2015-01-01', dateend='2018-12-31', fn_list={}, rule='Iamp>1.0', month_list=None, lead_list=[0,], exp_list=['1',],
                        Fnmjo='/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc'):
     """
     Calculate skills for different lead times and experiment numbers in parallel.
@@ -168,7 +168,7 @@ def get_skill_parallel(mjo_ind, fn_list={}, rule='Iamp>1.0', month_list=None, le
         # Submit tasks to the executor
         futures = [
             executor.submit(compute_get_skill_one, mjo_ind, fn=fn_list[(lead, exp_num)], rule=rule, 
-                            month_list=month_list, lead=lead, exp_num=exp_num, Fnmjo=Fnmjo)
+                            month_list=month_list, lead=lead, exp_num=exp_num, Fnmjo=Fnmjo, datesta=datesta, dateend=dateend)
             for lead in lead_list for exp_num in exp_list
         ]
         
@@ -297,4 +297,71 @@ def get_skill_hpo_exp1(
 
     return bcc_list, rmse_list
 
-    
+
+def get_skill_one_all_leads(mjo_ind, fn, rule='Iamp>1.0', month_list=None, datesta=None, dateend=None, lead_max=30,
+                       Fnmjo = '/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc'):
+    # mjo_ind: the index of MJO
+    # fn: prediction file 
+    # rule: the rule to select the data
+    # month_list: the list of months to select the data
+    # Fnmjo: original target file 
+
+    ds0 = xr.open_dataset(fn)
+    if datesta is None:
+        datesta = ds0.time[0].values
+    else:
+        # find the latest datesta
+        datesta = max(np.datetime64(datesta), np.datetime64(ds0.time[0].values))
+
+
+    if dateend is None:
+        dateend = ds0.time[-1].values
+    else:
+        # find the earliest dateend
+        dateend = min(np.datetime64(dateend), np.datetime64(ds0.time[-1].values))
+
+    ds = ds0.sel(time=slice(datesta, dateend))
+
+    phase, amp = get_phase_amp(mjo_ind=mjo_ind, datasta=datesta, dataend=dateend, Fnmjo=Fnmjo)
+
+    ds['iphase'] = xr.DataArray(phase, dims=['time'], attrs={'long_name': 'initial phase of MJO'})
+    ds['iamp'] = xr.DataArray(amp, dims=['time'], attrs={'long_name': 'initial amplitude of MJO'})
+
+    if rule == 'Iamp>1.0':
+        ds_sel = ds.where(ds.iamp>1.0, drop=True)
+    elif rule == 'Tamp>1.0':
+        ds_sel = ds.where(ds.tamp>1.0, drop=True)
+    elif rule == 'DJFM':
+        ds_sel = ds.where(ds.time.dt.month.isin([12,1,2,3]), drop=True)
+    elif rule == 'DJFM+Iamp>1.0':
+        ds_sel = ds.where(ds.time.dt.month.isin([12,1,2,3]), drop=True)
+        ds_sel = ds_sel.where(ds_sel.iamp>1.0, drop=True)
+    elif rule == 'month+Iamp>1.0':
+        ds_sel = ds.where(ds.time.dt.month.isin(month_list), drop=True)
+        ds_sel = ds_sel.where(ds_sel.iamp>1.0, drop=True)
+    elif rule == '1-1.5':
+        ds_sel = ds.where(ds.time.dt.month.isin([10,11,12,1,2,3]), drop=True)
+        ds_sel = ds_sel.where(ds_sel.iamp>1.0, drop=True)
+        ds_sel = ds_sel.where(ds_sel.iamp<=1.5, drop=True)
+    elif rule == '1.5-2':
+        ds_sel = ds.where(ds.time.dt.month.isin([10,11,12,1,2,3]), drop=True)
+        ds_sel = ds_sel.where(ds_sel.iamp>1.5, drop=True)
+        ds_sel = ds_sel.where(ds_sel.iamp<=2.0, drop=True)
+    elif rule == '2-4':
+        ds_sel = ds.where(ds.time.dt.month.isin([10,11,12,1,2,3]), drop=True)
+        ds_sel = ds_sel.where(ds_sel.iamp>2.0, drop=True)
+    elif rule == '0-1':
+        ds_sel = ds.where(ds.time.dt.month.isin([10,11,12,1,2,3]), drop=True)
+        ds_sel = ds_sel.where(ds_sel.iamp<1.0, drop=True)
+    elif rule == 'None':
+        ds_sel = ds
+
+    bcc = np.zeros(lead_max+1)
+    rmse = np.zeros(lead_max+1)
+
+    for i, lead in enumerate(range(lead_max+1)):  
+        bcc[i] = bulk_bcc(ds_sel['predictions'][:,2*i:2*i+2], ds_sel['targets'][:,2*i:2*i+2])
+        rmse[i] = bulk_rmse(ds_sel['predictions'][:,2*i:2*i+2], ds_sel['targets'][:,2*i:2*i+2])
+
+    return bcc, rmse
+   
