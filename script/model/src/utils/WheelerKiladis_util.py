@@ -1253,26 +1253,24 @@ def filter_olr(data, spd=1, lat_lim=15, remove_low=True, kmin=1, kmax=5, flow=1/
     # perform fft in longitude
     lon_dim = x_detrend_tap.dims.index('lon')
     fft_lon = np.fft.fft(x_detrend_tap, axis=lon_dim)  # time, lat, wavenumber
-    coef_flt = np.zeros(fft_lon.shape, dtype=complex)
     
     # 7. filter the fft coefficients
-    wavenum = np.fft.fftfreq(len(x_detrend_tap['lon']), d=1/len(x_detrend_tap['lon']))
-    kmin1 = np.argmin(np.abs(wavenum - kmin))
-    kmax1 = np.argmin(np.abs(wavenum - kmax))
-    print('kmin: ', kmin1, 'kmax: ', kmax1)
+    if kmin is None:
+        coef_flt = np.copy(fft_lon)
+    else:
+        coef_flt = np.zeros(fft_lon.shape, dtype=complex)
+        wavenum = np.fft.fftfreq(len(x_detrend_tap['lon']), d=1/len(x_detrend_tap['lon']))
+        kmin1 = np.argmin(np.abs(wavenum - kmin))
+        kmax1 = np.argmin(np.abs(wavenum - kmax))
+        print('kmin: ', kmin1, 'kmax: ', kmax1)
 
-    coef_flt[:, :, kmin1:kmax1+1] = fft_lon[:, :, kmin1:kmax1+1]  # time, lat, wavenumber
+        coef_flt[:, :, kmin1:kmax1+1] = fft_lon[:, :, kmin1:kmax1+1]  # time, lat, wavenumber
 
-    kmin2 = np.argmin(np.abs(wavenum + kmax))
-    kmax2 = np.argmin(np.abs(wavenum + kmin))
-    print('kmin: ', kmin2, 'kmax: ', kmax2)
+        kmin2 = np.argmin(np.abs(wavenum + kmax))
+        kmax2 = np.argmin(np.abs(wavenum + kmin))
+        print('kmin: ', kmin2, 'kmax: ', kmax2)
 
-    coef_flt[:, :, kmin2:kmax2+1] = fft_lon[:, :, kmin2:kmax2+1]  # time, lat, wavenumber; symmetric
-
-    # fft_lon[:, :, :kmin] = 0.0
-    # fft_lon[:, :, kmax+1:-kmax] = 0.0
-    # if kmin > 1: 
-    #     fft_lon[:, :, -kmin+1:] = 0.0
+        coef_flt[:, :, kmin2:kmax2+1] = fft_lon[:, :, kmin2:kmax2+1]  # time, lat, wavenumber; symmetric
 
     seg_dim = x_detrend_tap.dims.index('time')
     fft_lonseg = np.fft.fft(coef_flt, axis=seg_dim) 
@@ -1282,8 +1280,12 @@ def filter_olr(data, spd=1, lat_lim=15, remove_low=True, kmin=1, kmax=5, flow=1/
     thig = np.argmin(np.abs(freq - fhig))  # flow and fhig are always positive 
 
     fft_lonseg[:tlow, :, :] = 0.0
-    fft_lonseg[:-thig, :, kmin1:kmax1+1] = 0.0
-    fft_lonseg[thig+1:, :, kmin2:kmax2+1] = 0.0
+
+    if kmin is None:
+        fft_lonseg[thig+1:, :, :] = 0.0
+    else:
+        fft_lonseg[:-thig, :, kmin1:kmax1+1] = 0.0
+        fft_lonseg[thig+1:, :, kmin2:kmax2+1] = 0.0
 
     if tlow > 1:
         fft_lonseg[-tlow+1:, :, :] = 0.0

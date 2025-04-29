@@ -38,6 +38,7 @@ training:
   weight_decay: 0.001
   scheduler:
     type: "CosineAnnealingLR"
+  early_stopping_patience: 10
 
 data:
   # input_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/raw/olr.day.mean.nc

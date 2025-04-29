@@ -1,0 +1,54 @@
+dataset_type: "hov_allleads"
+
+model:
+  name: "UNet_A"
+  cnn:
+    name: "CNN"  # Name of the model
+    input_channel_num: 1  # Number of input channels (e.g., RGB images have 3 channels)
+    channels_list: [32,8]  # only for CNNMLP
+    num_filters_enc: 64  # only for unet
+    kernel_size: "3"  # Size of the convolutional kernel
+    stride: 1  # Stride for the convolution
+    padding: "same"  # Padding type ('same' or integer)
+    dropout: 0.1  # Dropout rate for regularization
+    batch_norm: false  # Whether to use batch normalization
+    nlon: 144  # the size of input map nlon
+  mlp:
+    hidden_layers: [1024, 128]
+    output_size: 72
+    dropout: 0.3
+
+training:
+  batch_size: 32
+  epochs: 20
+  optimizer: "SGD"
+  criterion: "MSELoss"
+  learning_rate: 0.001
+  momentum: 0.9
+  weight_decay: 0.001
+  scheduler:
+    type: "CosineAnnealingLR"
+  early_stopping_patience: 10
+
+data:
+  dataflg: 'raw'
+  input_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/raw/olr.day.mean.nc
+  target_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc
+  input_vars: ['olr']
+  target_vars: ['ROMI']
+  train_start: '1979-01-01'
+  train_end: '2009-12-31'
+  val_start: '2010-01-01'
+  val_end: '2015-12-31'
+  test_start: '2010-01-01'
+  test_end: '2022-12-31'
+  lead: 35
+  lat_range: 10
+  transform: null
+  memory_last: 95
+
+exp_num: 1
+
+pretrained_path: null 
+model_save_path: "/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/modelcheckpoints/{dataset_type}/{model_name}/exp{exp_num}/OLR_{lat_range}deg_lead{lead}_lr{lr}_batch{batch_size}_dropout{dropout}_ch_{channels_list_str}_ksize_{kernel_size}_hidden_{hidden_layers_str}_opt_{optimizer}_mom{momentum}_wd{weight_decay}_mem{memory_last}.pth"
+prediction_save_path: "/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/predictions/{dataset_type}/{model_name}/exp{exp_num}/OLR_{lat_range}deg_lead{lead}_lr{lr}_batch{batch_size}_dropout{dropout}_ch_{channels_list_str}_ksize_{kernel_size}_hidden_{hidden_layers_str}_opt_{optimizer}_mom{momentum}_wd{weight_decay}_mem{memory_last}.nc"

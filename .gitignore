@@ -6,3 +6,6 @@ debug*
 *.log
 *.out
 *.slurm
+*.db 
+*.pdf
+*.npy

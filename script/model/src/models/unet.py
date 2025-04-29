@@ -30,9 +30,9 @@ class UNet_A(nn.Module): # architecture from Ashesh
         """
         super(UNet_A, self).__init__()
 
-        num_filters_enc = 64
-        num_filters_dec1 = 128
-        num_filters_dec2 = 192
+        num_filters_enc = cnn_config.get("num_filters_enc", 64)
+        num_filters_dec1 = int(num_filters_enc * 2)
+        num_filters_dec2 = int(num_filters_enc * 3)
         # Initialize the CNN
         kernel_size_list = cnn_config.get("kernel_size", [5,5])
         print('kernel_size_list:', kernel_size_list)

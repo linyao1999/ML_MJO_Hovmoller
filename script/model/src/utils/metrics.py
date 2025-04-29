@@ -98,8 +98,8 @@ def get_skill_one(mjo_ind, fn, rule='Iamp>1.0', month_list=None, datesta=None, d
     ds['iphase'] = xr.DataArray(phase, dims=['time'], attrs={'long_name': 'initial phase of MJO'})
     ds['iamp'] = xr.DataArray(amp, dims=['time'], attrs={'long_name': 'initial amplitude of MJO'})
     # # target phase and amplitude
-    # phase = vectorized_get_phase(ds[mjo_ind+'t'][:,0].values, ds[mjo_ind+'t'][:,1].values)
-    # amp = np.sqrt(ds[mjo_ind+'t'][:,0].values**2+ds[mjo_ind+'t'][:,1].values**2)
+    # phase = vectorized_get_phase(ds['targets'][:,0].values, ds['targets'][:,1].values)
+    # amp = np.sqrt(ds['targets'][:,0].values**2+ds['targets'][:,1].values**2)
     # ds['tphase'] = xr.DataArray(phase, dims=['time'], attrs={'long_name': 'target phase of MJO'})
     # ds['tamp'] = xr.DataArray(amp, dims=['time'], attrs={'long_name': 'target amplitude of MJO'})
     
@@ -364,4 +364,71 @@ def get_skill_one_all_leads(mjo_ind, fn, rule='Iamp>1.0', month_list=None, dates
         rmse[i] = bulk_rmse(ds_sel['predictions'][:,2*i:2*i+2], ds_sel['targets'][:,2*i:2*i+2])
 
     return bcc, rmse
-   
+
+def compute_get_skill_one_all_leads(mjo_ind, fn, rule='Iamp>1.0', month_list=None, datesta=None, dateend=None, lead_max=30, exp_num='1',
+                       Fnmjo = '/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc'):    
+    bcc, rmse = get_skill_one_all_leads(mjo_ind, fn, rule=rule, month_list=month_list, Fnmjo=Fnmjo, datesta=datesta, dateend=dateend, lead_max=lead_max)
+    return exp_num, {'bcc': bcc, 'rmse': rmse}
+
+def get_skill_all_leads_parallel(mjo_ind, datesta='2015-01-01', dateend='2018-12-31', fn_list=[], rule='Iamp>1.0', month_list=None, lead_max=30, exp_list=['1',],
+                       Fnmjo='/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc'):
+
+    bcc_list = {}
+    rmse_list = {}
+
+    with ProcessPoolExecutor() as executor:
+        # Submit tasks to the executor
+        futures = [
+            executor.submit(compute_get_skill_one_all_leads, mjo_ind, fn=fn, rule=rule, 
+                            month_list=month_list, lead_max=lead_max, exp_num=exp_num, Fnmjo=Fnmjo, datesta=datesta, dateend=dateend)
+            for fn in fn_list for exp_num in exp_list
+        ]
+        
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(futures):
+            exp_num, result = future.result()
+            bcc_list[exp_num] = result['bcc']
+            rmse_list[exp_num] = result['rmse']
+                
+    return bcc_list, rmse_list
+
+
+def skill_hovallleads_ensemble_mean(
+    fn_list = [],
+    exp_num_list = np.arange(1,101),
+    lat_lim = 10,
+    mjo_ind = 'ROMI',
+    leadmjo = 35,
+    dataflg = 'era5',
+    datesta='2016-01-01',
+    dateend='2021-12-31',
+    ampthred=1, 
+    Fnmjo = '/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc'
+    ):
+
+    rmm = xr.open_dataset(Fnmjo)[mjo_ind].sel(time=slice(datesta, dateend))
+    amp = (rmm[:,0]**2 + rmm[:,1]**2)**0.5
+
+    # first calculate the ensemble mean, then calculate bcc and rmse
+    dss = [xr.open_dataset(fn).sel(time=slice(datesta, dateend)) for fn in fn_list]
+    ds = xr.concat(dss, dim='exp_num')
+    
+    ds_sel = ds.where(amp>ampthred, drop=True)
+
+    ds_mean = ds_sel.mean(dim='exp_num')
+
+    bcc = []
+    rmse = []
+
+    for i in np.arange(0,leadmjo+1):
+        bcc_sel = np.sum(ds_mean['predictions'][:,i*2] * ds_mean['targets'][:,i*2] + ds_mean['predictions'][:,2*i+1]*ds_mean['targets'][:,2*i+1]) / (np.sqrt(np.sum(ds_mean['predictions'][:,i*2]**2 + ds_mean['predictions'][:,i*2+1]**2)) * np.sqrt(np.sum(ds_mean['targets'][:,2*i]**2 + ds_mean['targets'][:,2*i+1]**2)))
+        bcc.append(bcc_sel)
+        rmse_sel = np.sqrt(np.mean((ds_mean['predictions'][:,i*2] - ds_mean['targets'][:,i*2])**2 + (ds_mean['predictions'][:,i*2+1] - ds_mean['targets'][:,i*2+1])**2))
+        rmse.append(rmse_sel)
+
+    bcc = np.array(bcc)
+    rmse = np.array(rmse)
+
+    return bcc, rmse
+
+    
