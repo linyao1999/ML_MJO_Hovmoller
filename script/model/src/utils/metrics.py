@@ -381,7 +381,7 @@ def get_skill_all_leads_parallel(mjo_ind, datesta='2015-01-01', dateend='2018-12
         futures = [
             executor.submit(compute_get_skill_one_all_leads, mjo_ind, fn=fn, rule=rule, 
                             month_list=month_list, lead_max=lead_max, exp_num=exp_num, Fnmjo=Fnmjo, datesta=datesta, dateend=dateend)
-            for fn in fn_list for exp_num in exp_list
+            for exp_num, fn in zip(exp_list, fn_list)
         ]
         
         # Collect results as they complete
@@ -393,20 +393,18 @@ def get_skill_all_leads_parallel(mjo_ind, datesta='2015-01-01', dateend='2018-12
     return bcc_list, rmse_list
 
 
-def skill_hovallleads_ensemble_mean(
+def get_skill_all_leads_ensemble_mean(
     fn_list = [],
     exp_num_list = np.arange(1,101),
     lat_lim = 10,
-    mjo_ind = 'ROMI',
     leadmjo = 35,
-    dataflg = 'era5',
     datesta='2016-01-01',
     dateend='2021-12-31',
     ampthred=1, 
     Fnmjo = '/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc'
     ):
 
-    rmm = xr.open_dataset(Fnmjo)[mjo_ind].sel(time=slice(datesta, dateend))
+    rmm = xr.open_dataarray(Fnmjo).sel(time=slice(datesta, dateend))
     amp = (rmm[:,0]**2 + rmm[:,1]**2)**0.5
 
     # first calculate the ensemble mean, then calculate bcc and rmse

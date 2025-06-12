@@ -1,0 +1,51 @@
+data:
+  dataflg: fltano120
+  grid_res: 2
+  input_path:
+  - /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/processed/fltano120/olr.fltano120.noaa.2x2.1979to2022based1979to2001.nc
+  input_vars:
+  - olr
+  lat_range: 20
+  lead: 35
+  memory_last: 0
+  target_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/noaa/ROMI_NOAA_1979to2022.nc
+  target_vars:
+  - ROMI
+  test_end: '2021-12-31'
+  test_start: '2010-01-01'
+  train_end: '2009-12-31'
+  train_start: '1979-05-01'
+  transform: null
+  val_end: '2015-12-31'
+  val_start: '2010-01-01'
+dataset_type: latavg
+exp_num: 1
+model:
+  cnn:
+    batch_norm: false
+    dropout: 0.1
+    input_channel_num: 1
+    layer_num: 2
+    name: CNN
+    num_filters_enc: null
+    padding: same
+    stride: 1
+  mlp:
+    dropout: 0.3
+    layer_num: 1
+    output_size: 72
+  name: CNN_MLP
+model_save_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/modelcheckpoints/{dataset_type}/{model_name}/exp{exp_num}/OLR_{lat_range}deg_lead{lead}_lr{lr}_batch{batch_size}_dropout{dropout}_ch_{channels_list_str}_ksize_{kernel_size}_hidden_{hidden_layers_str}_opt_{optimizer}_mom{momentum}_wd{weight_decay}_mem{memory_last}.pth
+prediction_save_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/predictions/{dataset_type}/{model_name}/exp{exp_num}/OLR_{lat_range}deg_lead{lead}_lr{lr}_batch{batch_size}_dropout{dropout}_ch_{channels_list_str}_ksize_{kernel_size}_hidden_{hidden_layers_str}_opt_{optimizer}_mom{momentum}_wd{weight_decay}_mem{memory_last}.nc
+pretrained_path: null
+training:
+  batch_size: 32
+  criterion: MSELoss
+  early_stopping_patience: 10
+  epochs: 100
+  learning_rate: 0.001
+  momentum: 0.9
+  optimizer: SGD
+  scheduler:
+    type: CosineAnnealingLR
+  weight_decay: 0.001

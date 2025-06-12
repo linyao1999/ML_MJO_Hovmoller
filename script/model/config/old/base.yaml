@@ -1,43 +1,26 @@
-dataset_type: "map"
-
-data:
-  dataflg: 'fltano120'
-  input_path:
-    - /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/processed/fltano120/olr.fltano120.noaa.2x2.1979to2022based1979to2001.nc
-  target_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/noaa/ROMI_NOAA_1979to2022.nc
-  input_vars: ['olr']
-  target_vars: ['ROMI']
-  train_start: '1979-05-01'
-  train_end: '2009-12-31'
-  val_start: '2010-01-01'
-  val_end: '2015-12-31'
-  test_start: '2010-01-01'
-  test_end: '2021-12-31'
-  lead: 35
-  lat_range: 20
-  grid_res: 2  # grid spacing in degrees
-  transform: null
-  memory_last: 0  # for datasets other than map*
+dataset_type: "hov_allleads"
 
 model:
-  name: "CNN_MLP"
+  name: "UNet_A"
   cnn:
     name: "CNN"  # Name of the model
     input_channel_num: 1  # Number of input channels (e.g., RGB images have 3 channels)
-    layer_num: 1 # only for CNNMLP
-    num_filters_enc: null  # only for unet
+    channels_list: [32,8]  # only for CNNMLP
+    num_filters_enc: 64  # only for unet
+    kernel_size: "3"  # Size of the convolutional kernel
     stride: 1  # Stride for the convolution
     padding: "same"  # Padding type ('same' or integer)
     dropout: 0.1  # Dropout rate for regularization
     batch_norm: false  # Whether to use batch normalization
+    nlon: 144  # the size of input map nlon
   mlp:
-    layer_num: 0
+    hidden_layers: [1024, 128]
     output_size: 72
     dropout: 0.3
 
 training:
   batch_size: 32
-  epochs: 100
+  epochs: 20
   optimizer: "SGD"
   criterion: "MSELoss"
   learning_rate: 0.001
@@ -46,6 +29,23 @@ training:
   scheduler:
     type: "CosineAnnealingLR"
   early_stopping_patience: 10
+
+data:
+  dataflg: 'raw'
+  input_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/raw/olr.day.mean.nc
+  target_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/romi/ROMI_NOAA_1979to2022.nc
+  input_vars: ['olr']
+  target_vars: ['ROMI']
+  train_start: '1979-01-01'
+  train_end: '2009-12-31'
+  val_start: '2010-01-01'
+  val_end: '2015-12-31'
+  test_start: '2010-01-01'
+  test_end: '2022-12-31'
+  lead: 35
+  lat_range: 10
+  transform: null
+  memory_last: 95
 
 exp_num: 1
 

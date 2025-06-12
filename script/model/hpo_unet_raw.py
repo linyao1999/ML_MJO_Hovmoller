@@ -60,7 +60,7 @@ def objective(trial):
     config["model"]["cnn"]["kernel_size"] = [int(kernel_size_h), int(kernel_size_w)]
     config["kernel_size_str"] = f"{kernel_size_h}_{kernel_size_w}"
     config["model"]["cnn"]["input_map_size"] = config["model"]["cnn"]["nlon"] * (1 + config["data"]["memory_last"])
-    print('warning test 62')
+
     # Load data
     train_loader = load_train_data(config, dataset_type=config["dataset_type"])
     val_loader = load_val_data(config, dataset_type=config["dataset_type"])
@@ -74,7 +74,7 @@ def objective(trial):
         raise ValueError(f"Unsupported model: {model_name}")
 
     logger.info(f'Training with filters={num_filters_enc}, hidden={config["hidden_layers_str"]}, kernel={config["kernel_size_str"]}')
-    print('warning test 76')
+
     val_loss, _ = train_model_hpo(model, train_loader, val_loader, config, trial)
     return val_loss
 
