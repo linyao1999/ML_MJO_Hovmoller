@@ -1,0 +1,64 @@
+data:
+  dataflg: fltano120
+  grid_res: 2
+  input_path:
+  - /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/processed/fltano120/olr.fltano120.noaa.2x2.1979to2022based1979to2001.nc
+  input_vars:
+  - olr
+  lat_range: 20
+  lead: 35
+  memory_last: 0
+  target_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/noaa/ROMI_NOAA_1979to2022.nc
+  target_vars:
+  - ROMI
+  test_end: '2021-12-31'
+  test_start: '2010-01-01'
+  train_end: '2009-12-31'
+  train_start: '1979-05-01'
+  transform: null
+  val_end: '2015-12-31'
+  val_start: '2010-01-01'
+dataset_type: map
+exp_num: '1'
+hidden_layers_str: '512_256'
+kernel_size_str: '0_0'
+model:
+  cnn:
+    batch_norm: false
+    channels_list_str: 'null'
+    dropout: 0.1
+    input_channel_num: 1
+    input_map_size: 3780
+    kernel_size:
+    - 0
+    - 0
+    layer_num: 1
+    name: CNN
+    nlat: 21
+    nlon: 180
+    num_filters_enc: null
+    padding: same
+    stride: 1
+  mlp:
+    dropout: 0.4774085609322901
+    hidden_layers:
+    - 512
+    - 256
+    layer_num: 2
+    output_size: 72
+  name: MLP
+model_save_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/modelcheckpoints/map/MLP/exp1/OLR_20deg_lead35_lr2.8034186711737372e-05_batch16_dropout0.4774085609322901_ch_null_ksize_0_0_hidden_512_256_opt_Adam_mom0.9_wd2.2029393110726946e-06_mem0.pth
+prediction_save_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/predictions/map/MLP/exp1/OLR_20deg_lead35_lr2.8034186711737372e-05_batch16_dropout0.4774085609322901_ch_null_ksize_0_0_hidden_512_256_opt_Adam_mom0.9_wd2.2029393110726946e-06_mem0.nc
+pretrained_path: null
+training:
+  batch_size: 16
+  criterion: MSELoss
+  early_stopping_patience: 10
+  epochs: 100
+  learning_rate: 2.8034186711737372e-05
+  momentum: 0.9
+  optimizer: Adam
+  scheduler:
+    T_max: 100
+    type: CosineAnnealingLR
+  weight_decay: 2.2029393110726946e-06

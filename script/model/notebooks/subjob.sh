@@ -18,7 +18,7 @@ source $(conda info --base)/etc/profile.d/conda.sh
 conda activate python
 
 # Run jobs in parallel, each task gets 64 CPUs
-srun --exclusive -N1 -n1 --cpus-per-task=64 python feature_maps.py &
+# srun --exclusive -N1 -n1 --cpus-per-task=64 python feature_maps.py &
 srun --exclusive -N1 -n1 --cpus-per-task=64 python kernels.py &
 
 wait

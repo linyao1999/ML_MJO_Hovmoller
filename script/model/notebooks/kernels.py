@@ -11,22 +11,23 @@ import xarray as xr
 import os
 import re
 
+# salloc --nodes 1 --qos interactive --time 04:00:00 --constraint cpu --account=dasrepo
+
 exp_total = 96
-hidden_layer = ['cnn.network.3',]
+hidden_layer = ['cnn.network.3.weight',]
 hid_str = '_'.join(hidden_layer)
-c = 51
 
 exp_dir = "/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/exp"
 exp_names = [
-    "CNN_1_FCN_1_map_to_leads",
-    "CNN_2_FCN_2_map_to_leads",
-    "CNN_3_FCN_3_map_to_leads",
+    # "CNN_1_FCN_1_map_to_leads",
+    # "CNN_2_FCN_2_map_to_leads",
+    # "CNN_3_FCN_3_map_to_leads",
     "CNN_2_FCN_2_hov_to_leads",
-    "CNN_2_FCN_2_hov_two_to_leads",
-    "CNN_2_FCN_2_latavg_to_leads",
+    # "CNN_2_FCN_2_hov_two_to_leads",
+    # "CNN_2_FCN_2_latavg_to_leads",
     # "CNN_2_FCN_2_latavg_time_to_leads",
-    "CNN_2_FCN_2_map_sym_to_leads",
-    "CNN_2_FCN_2_map_asym_to_leads",
+    # "CNN_2_FCN_2_map_sym_to_leads",
+    # "CNN_2_FCN_2_map_asym_to_leads",
 ]
 folder_list = [os.path.join(exp_dir, name) for name in exp_names]
 print(folder_list)
@@ -47,7 +48,7 @@ for folder in folder_list:
     with open(config_path, 'r') as file:
         config = yaml.safe_load(file)
 
-    mjo.get_kernel_power_mk_one(
+    mjo.get_kernel_fftpower_norm_ensemble(
         config,
         exp_num_list=np.arange(1, exp_total+1),
         hidden_layer=hidden_layer,
@@ -68,7 +69,8 @@ for folder in folder_list:
             norm_powers = np.stack(norm_powers)  # shape: [out, in, ky, kx]
 
         # Reshape to [filter, ky, kx]
-        out, in_ch, ky_len, kx_len = norm_powers.shape
+        # print('norm_powers.shape: ', norm_powers.squeeze().shape)
+        out, in_ch, ky_len, kx_len = norm_powers.squeeze().shape
         norm_powers_reshaped = norm_powers.reshape(out * in_ch, ky_len, kx_len)
 
         # Create DataArray
@@ -90,11 +92,13 @@ for folder in folder_list:
     power_norm.attrs['hidden_layer'] = hid_str
 
     # save the averaged power norm to a new file
-    out_fn = output_dir + f'/kernels_power_norm_{hid_str}_c{c}{reluflg}.nc'
+    out_fn = output_dir + f'/kernels_power_norm_{hid_str}.nc'
     power_norm.to_netcdf(out_fn, mode='w')
     print(f'Saved to {out_fn}')
     print('Done!')
 
     
+
+
 
 

@@ -14,6 +14,7 @@ class MLP(nn.Module):
         self.network = nn.Sequential(*layers)
 
     def forward(self, x):
+        x = x.view(x.size(0), -1)  # Flatten the input
         return self.network(x)
 
         
