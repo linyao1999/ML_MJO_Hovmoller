@@ -5,7 +5,7 @@
 
 # source activate python
 source $(conda info --base)/etc/profile.d/conda.sh
-conda activate python
+conda activate mlpy
 
 for i in {1..6}; do
     for j in {1..16}; do

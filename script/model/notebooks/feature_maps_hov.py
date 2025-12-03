@@ -13,7 +13,11 @@ import re
 import gc
 # salloc --nodes 1 --qos interactive --time 04:00:00 --constraint cpu --account=dasrepo
 
-exp_total = 96
+
+window_len = 21
+residual = 'False'
+
+exp_total = 10
 hidden_layer = [-1,]
 hid_str = '_'.join([str(x) for x in hidden_layer])
 c = 51
@@ -24,7 +28,7 @@ else:
     reluflg = ''
 exp_dir = "/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/exp"
 exp_names = [
-    "CNN_2_FCN_2_hov_to_leads",
+    "CNN_2_FCN_3_hov_sm_to_leads",
 ]
 folder_list = [os.path.join(exp_dir, name) for name in exp_names]
 # print(folder_list)
@@ -36,7 +40,7 @@ for folder in folder_list:
         print(f"Output directory {output_dir} does not exist. Skipping...")
         continue
 
-    config_path = os.path.join(output_dir, 'best_config.yaml')
+    config_path = os.path.join(output_dir, f'./yaml/best_config_sm{window_len}_res{residual}.yaml')
     if not os.path.exists(config_path):
         print(f"{config_path} does not exist. Skipping...")
         continue
@@ -64,7 +68,7 @@ for folder in folder_list:
     power_norm.attrs['hidden_layer'] = hid_str
 
     # save the averaged power norm to a new file
-    out_fn = output_dir + f'/feature_power_norm_{hid_str}{reluflg}.nc'
+    out_fn = output_dir + f'/feature_power_norm_{hid_str}{reluflg}_sm{str(window_len)}_res{str(residual)}.nc'
     power_norm.to_netcdf(out_fn, mode='w')
     print(f'Saved to {out_fn}')
     print('Done!')

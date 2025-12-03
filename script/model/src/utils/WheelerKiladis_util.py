@@ -15,6 +15,7 @@ import math
 import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap
 import dask.array as da
+from scipy.signal import windows
 
 # Define the colormap from the 'coolwarm' base colormap
 original_coolwarm = plt.cm.get_cmap('coolwarm')
@@ -391,7 +392,7 @@ def spacetime_power_sym(data, segsize=96, noverlap=60, spd=1, lat_lim=15, remove
     data1 = data.sel(lat=slice(lat_lim, -lat_lim)).load()
     # # Assuming lat is a coordinate in your xarray Dataset or DataArray
     # latitude_values = data1.lat.values
-
+    print('size of data1: ', data1.shape)
     # # Open a text file and write latitude values to it
     # with open('latitude_values_data1.txt', 'w') as f:
     #     for value in latitude_values:
@@ -841,7 +842,7 @@ def genDispersionCurves(nWaveType=6, nPlanetaryWave=50, rlat=0, Ahe=[50, 20, 10]
                     Afreq[ww-1,ed-1,wn-1] = fillval
     return  Afreq, Apzwn
 
-def wk_plot_sym(sym, tlt='', logflg=True, savflg=False, pltDispCurve=True, fb=[0,0.48], center0=False, filename='wk.png', setcolor=False, vmax=None, vmin=None, cmapflg='Blues'):
+def wk_plot_sym(sym, tlt='', logflg=True, savflg=False, pltDispCurve=True, fb=[0,0.48], center0=False, filename='wk.png', setcolor=False, vmax=None, vmin=None, cmapflg='Blues', contourlevels=8):
     wavenumber = sym['wavenumber']
     frequency = sym['frequency']
 
@@ -862,12 +863,14 @@ def wk_plot_sym(sym, tlt='', logflg=True, savflg=False, pltDispCurve=True, fb=[0
             c = ax.contourf(wavenumber, frequency, np.log10(sym.T), cmap='RdBu_r', levels=15, vmin=-vmax, vmax=vmax)
         else:
             if setcolor:
-                c = ax.contourf(wavenumber, frequency, np.log10(sym.T), cmap=cmapflg, vmin=vmin, vmax=vmax, levels=8)
+                c = ax.contourf(wavenumber, frequency, np.log10(sym.T), cmap=cmapflg, vmin=vmin, vmax=vmax, levels=np.linspace(vmin, vmax, 11))
+                caxtour = ax.contour(wavenumber, frequency, np.log10(sym.T),levels=contourlevels, colors='black')
+                ax.clabel(caxtour, fmt='%.1f', colors='black', fontsize=12)
             else:
                 c = ax.contourf(wavenumber, frequency, np.log10(sym.T), cmap=cmapflg, levels=8)
     else:
         if setcolor:
-            c = ax.contourf(wavenumber, frequency, sym.T, vmin=vmin, vmax=vmax, levels=8, cmap=cmapflg)
+            c = ax.contourf(wavenumber, frequency, sym.T, levels=np.linspace(vmin, vmax, 11), cmap=cmapflg)
         else:
             c = ax.contourf(wavenumber, frequency, sym.T, levels=8, cmap=cmapflg)
         # c = ax.contourf(wavenumber, frequency, sym.T, cmap='Reds', levels=25)
@@ -1302,3 +1305,516 @@ def filter_olr(data, spd=1, lat_lim=15, remove_low=True, kmin=1, kmax=5, flow=1/
 
     return x_filtered
 
+
+def spacetime_power_runningavg(data, segsize=96, noverlap=60, spd=1, lat_lim=15, remove_low=True, sigtest=False, window_len=5, weighted=True):
+    """
+    Perform space-time spectral decomposition and return raw power spectrum following Wheeler-Kiladis approach.
+
+    data: an xarray DataArray to be analyzed; needs to have (time, lat, lon) dimensions.
+    segsize: integer (days) denoting the size of time samples that will be decomposed (typically about 96)
+    noverlap: integer (days) denoting the number of days of overlap from one segment to the next
+    spd: sampling rate, in "samples per day" (e.g. daily=1, 6-houry=4)
+    latitude_bounds: a tuple of (southern_extent, northern_extent) to reduce data size.
+
+    Method
+    ------------------
+        0. Remove the first three harmonics of annual cycle to prevent aliasing.
+        1. Subsample in latitude if latitude_bounds is specified.
+        2. Construct symmetric/antisymmetric array .
+        3. Construct overlapping window view of data.
+        4. Detrend the segments (remove linear trend).
+        5. Apply taper in time dimension of windows (aka segments).
+        6. Fourier transform
+        7. calculate the power.
+        8. average over all segments
+        9. sum the power over all latitudes.
+        
+    Notes
+    ---------------------------
+        Upon returning power, this should be comparable to "raw" spectra. 
+        Next step would be be to smooth with `smooth_wavefreq`, 
+        and divide raw spectra by smooth background to obtain "significant" spectral power.
+        
+    """
+
+    segsize = spd * segsize  # how many time steps included.
+    noverlap = spd * noverlap  
+
+    # select the interested section in data
+    # # NOTE: starting from negative values; if your dataset starts from positive latitudes, please revise the following line
+    # data1 = data.sel(lat=slice(-lat_lim, lat_lim))
+    # NOTE: starting from positive values; if your dataset starts from negative latitudes, please revise the following line
+    data1 = data.sel(lat=slice(lat_lim, -lat_lim))
+    # # Assuming lat is a coordinate in your xarray Dataset or DataArray
+    # latitude_values = data1.lat.values
+
+
+    # 0. remove low-frequency signals
+    if remove_low:
+        data2 = rmv_lowfreq(data1)
+    else:
+        data2 = data1
+
+    # 2. [time, lat(pos+neg), lon]
+    # lat<0: symmetric; lat>0: antisymmetric
+    data_sym_asym = decompose2SymAsym(data2)
+
+    # 3. 
+    data_sym_asym0 = data_sym_asym.rolling(time=segsize, min_periods=segsize).construct("segments").dropna('time')  # WK99 use 96-day window
+    # x_roll_asym0 = data_asym.rolling(time=segsize, min_periods=segsize).construct("segments").dropna('time')  # WK99 use 96-day window
+    
+    # set overlaps
+    x_roll_sym_asym = data_sym_asym0.isel(time=slice(None, None, segsize-noverlap))
+    # x_roll_asym = x_roll_asym0.isel(time=slice(None, None, segsize-noverlap))
+
+    seg_dim = x_roll_sym_asym.dims.index('segments')
+    # print('seg_dim: ' + str(seg_dim))
+
+
+    original_dims = x_roll_sym_asym.dims
+    x_roll_sym_asym = x_roll_sym_asym.chunk({'time': 1, 'lat': 'auto', 'lon': 'auto', 'segments': -1})
+
+    if weighted:
+        taper_weights = xr.DataArray(
+            windows.hann(window_len), 
+            dims=['window']
+        )
+        taper_weights = taper_weights / taper_weights.sum()
+
+        rolling_windows = x_roll_sym_asym.rolling(
+            segments=window_len, 
+            center=True, 
+            min_periods=1  # min_periods=1 is tricky with weighted averages, see note
+        ).construct('window')
+
+        weighted_sum = (rolling_windows * taper_weights).sum(dim='window', skipna=True).compute()
+        valid_weights = taper_weights.where(rolling_windows.notnull())
+        weights_sum = valid_weights.sum(dim='window', skipna=True)
+
+        x_roll_sym_asym = (weighted_sum / weights_sum).compute()
+    else:
+        # apply running averages to each segment
+        x_roll_sym_asym = x_roll_sym_asym.rolling(segments=window_len, center=True, min_periods=1).mean().dropna('segments')
+
+    print('coordinates: ', x_roll_sym_asym.dims)
+    print('size of x_roll_sym_asym: ', x_roll_sym_asym.shape)
+
+    x_roll_sym_asym = x_roll_sym_asym.chunk(dict(segments=-1))
+
+    def detrend_timeseries(ts):
+        time_nums = np.arange(ts.size)
+        coeffs = np.polyfit(time_nums, ts, 1)
+        trend = np.polyval(coeffs, time_nums)
+        return ts - trend
+
+    # Use apply_ufunc to apply the detrending
+    detrended_data = xr.apply_ufunc(
+        detrend_timeseries,
+        x_roll_sym_asym,  # Your Dask-backed DataArray
+        input_core_dims=[['segments']],
+        output_core_dims=[['segments']],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[x_roll_sym_asym.dtype]
+    )
+
+    # print('detrended_data: ', detrended_data.shape)
+    x_detrend_sym_asym = detrended_data.compute()
+
+    # x_detrend_sym_asym = x_detrend_sym_asym.transpose(*original_dims)
+
+    # print('coordinates: ', x_detrend_sym_asym.dims)
+    # print('size of x_roll_sym_asym: ', x_detrend_sym_asym.shape)
+
+    # 5. add taper
+    # using hanning window w[n] = 0.5 * (1 - cos(2*pi*n/(M-1))) to create split cosine bell taper
+    taper = split_hann_taper(seg_size=segsize, fraction=0.5)
+
+    # print('size of taper: ', np.shape(taper))
+
+    x_detrend_tap = x_detrend_sym_asym * taper  # time, lat, lon, segments
+    # x_detrend_asymtap = x_detrend_asym * taper
+
+    # 6. fourier transform within 2 steps 
+    # perform fft in longitude
+    lon_dim = x_detrend_tap.dims.index('lon')
+    lon_size = x_detrend_tap.shape[lon_dim]
+    # following ncl script, we normalize the fft coefficients with lon_size
+    fft_lon = np.fft.fft(x_detrend_tap, axis=lon_dim) / lon_size # time, lat, wavenumber, segments
+    # fft_lon_asym = np.fft.fft(x_detrend_asymtap, axis=lon_dim) / lon_size # time, lat, wavenumber, segments
+    # perform fft in segments
+    seg_dim = x_detrend_tap.dims.index('segments')
+    seg_size = x_detrend_tap.shape[seg_dim]
+    fft_lonseg = np.fft.fft(fft_lon, axis=seg_dim) / seg_size  # time, lat, wavenumber, frequency
+    # fft_lonseg_asym = np.fft.fft(fft_lon_asym, axis=seg_dim) / seg_size  # time, lat, wavenumber, frequency
+
+    fft_sym_asym = xr.DataArray(
+        data=fft_lonseg,
+        dims=("time","lat","wavenumber","frequency"),
+        coords={
+            "time": x_detrend_tap["time"],
+            "lat": x_detrend_tap["lat"],
+            "wavenumber": np.fft.fftfreq(lon_size, 1/lon_size),  # how many cycles along the equator 
+            "frequency": np.fft.fftfreq(seg_size, 1/spd),  # the frequency (day-1)
+        }
+    )
+
+    # 7. [time, lat, wavenumber, frequency]
+    # reorder coef matrix according to ncl script
+    fft_reorder = Hayashi(fft_sym_asym, segsize/spd)
+    # fft_asym_reorder = Hayashi(fft_asym, segsize/spd)
+    
+    # 8. average over all segments [wavenumber, frequency]
+    zsym = 2.0 * fft_reorder.isel(lat=fft_reorder.lat<0).mean(dim='time').sum(dim='lat').squeeze()
+    zsym.name = "power"
+    zasym = 2.0 * fft_reorder.isel(lat=fft_reorder.lat>0).mean(dim='time').sum(dim='lat').squeeze()
+    zasym.name = "power"
+
+    if sigtest:
+        # get power spectra for each segment for significance test [time, wavenumber, frequency]
+        zsym1 = 2.0 * fft_reorder.isel(lat=fft_reorder.lat<0).sum(dim='lat').squeeze()
+        zasym1 = 2.0 * fft_reorder.isel(lat=fft_reorder.lat>0).sum(dim='lat').squeeze()
+        return zsym.where(zsym['frequency']>0, drop=True), zasym.where(zasym['frequency']>0, drop=True), zsym1.where(zsym1['frequency']>0, drop=True), zasym1.where(zasym1['frequency']>0, drop=True)
+
+    else:
+        return zsym.where(zsym['frequency']>0, drop=True), zasym.where(zasym['frequency']>0, drop=True)
+
+def spacetime_power_runningavg_minus(data, segsize=96, noverlap=60, spd=1, lat_lim=15, remove_low=True, sigtest=False, window_len=5, weighted=True):
+    """
+    Perform space-time spectral decomposition and return raw power spectrum following Wheeler-Kiladis approach.
+
+    data: an xarray DataArray to be analyzed; needs to have (time, lat, lon) dimensions.
+    segsize: integer (days) denoting the size of time samples that will be decomposed (typically about 96)
+    noverlap: integer (days) denoting the number of days of overlap from one segment to the next
+    spd: sampling rate, in "samples per day" (e.g. daily=1, 6-houry=4)
+    latitude_bounds: a tuple of (southern_extent, northern_extent) to reduce data size.
+
+    Method
+    ------------------
+        0. Remove the first three harmonics of annual cycle to prevent aliasing.
+        1. Subsample in latitude if latitude_bounds is specified.
+        2. Construct symmetric/antisymmetric array .
+        3. Construct overlapping window view of data.
+        4. Detrend the segments (remove linear trend).
+        5. Apply taper in time dimension of windows (aka segments).
+        6. Fourier transform
+        7. calculate the power.
+        8. average over all segments
+        9. sum the power over all latitudes.
+        
+    Notes
+    ---------------------------
+        Upon returning power, this should be comparable to "raw" spectra. 
+        Next step would be be to smooth with `smooth_wavefreq`, 
+        and divide raw spectra by smooth background to obtain "significant" spectral power.
+        
+    """
+
+    segsize = spd * segsize  # how many time steps included.
+    noverlap = spd * noverlap  
+
+    # select the interested section in data
+    # # NOTE: starting from negative values; if your dataset starts from positive latitudes, please revise the following line
+    # data1 = data.sel(lat=slice(-lat_lim, lat_lim))
+    # NOTE: starting from positive values; if your dataset starts from negative latitudes, please revise the following line
+    data1 = data.sel(lat=slice(lat_lim, -lat_lim))
+    # # Assuming lat is a coordinate in your xarray Dataset or DataArray
+    # latitude_values = data1.lat.values
+
+
+    # 0. remove low-frequency signals
+    if remove_low:
+        data2 = rmv_lowfreq(data1)
+    else:
+        data2 = data1
+
+    # 2. [time, lat(pos+neg), lon]
+    # lat<0: symmetric; lat>0: antisymmetric
+    data_sym_asym = decompose2SymAsym(data2)
+
+    # 3. 
+    data_sym_asym0 = data_sym_asym.rolling(time=segsize, min_periods=segsize).construct("segments").dropna('time')  # WK99 use 96-day window
+    # x_roll_asym0 = data_asym.rolling(time=segsize, min_periods=segsize).construct("segments").dropna('time')  # WK99 use 96-day window
+    
+    # set overlaps
+    x_roll_sym_asym = data_sym_asym0.isel(time=slice(None, None, segsize-noverlap))
+    # x_roll_asym = x_roll_asym0.isel(time=slice(None, None, segsize-noverlap))
+
+    seg_dim = x_roll_sym_asym.dims.index('segments')
+    # print('seg_dim: ' + str(seg_dim))
+
+
+    original_dims = x_roll_sym_asym.dims
+    x_roll_sym_asym = x_roll_sym_asym.chunk({'time': 1, 'lat': 'auto', 'lon': 'auto', 'segments': -1})
+
+    # # apply running averages to each segment
+    # x_roll_sym_asym_sm = x_roll_sym_asym.rolling(segments=window_len, center=True, min_periods=1).mean().dropna('segments')
+
+    if weighted:
+        taper_weights = xr.DataArray(
+            windows.hann(window_len), 
+            dims=['window']
+        )
+        taper_weights = taper_weights / taper_weights.sum()
+
+        rolling_windows = x_roll_sym_asym.rolling(
+            segments=window_len, 
+            center=True, 
+            min_periods=1  # min_periods=1 is tricky with weighted averages, see note
+        ).construct('window')
+
+        weighted_sum = (rolling_windows * taper_weights).sum(dim='window', skipna=True).compute()
+        valid_weights = taper_weights.where(rolling_windows.notnull())
+        weights_sum = valid_weights.sum(dim='window', skipna=True)
+
+        x_roll_sym_asym_sm = (weighted_sum / weights_sum).compute()
+    else:
+        # apply running averages to each segment
+        x_roll_sym_asym_sm = x_roll_sym_asym.rolling(segments=window_len, center=True, min_periods=1).mean().dropna('segments')
+
+    x_roll_sym_asym = x_roll_sym_asym - x_roll_sym_asym_sm.values 
+    print('coordinates: ', x_roll_sym_asym.dims)
+    print('size of x_roll_sym_asym: ', x_roll_sym_asym.shape)
+
+    x_roll_sym_asym = x_roll_sym_asym.chunk(dict(segments=-1))
+
+    def detrend_timeseries(ts):
+        time_nums = np.arange(ts.size)
+        coeffs = np.polyfit(time_nums, ts, 1)
+        trend = np.polyval(coeffs, time_nums)
+        return ts - trend
+
+    # Use apply_ufunc to apply the detrending
+    detrended_data = xr.apply_ufunc(
+        detrend_timeseries,
+        x_roll_sym_asym,  # Your Dask-backed DataArray
+        input_core_dims=[['segments']],
+        output_core_dims=[['segments']],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[x_roll_sym_asym.dtype]
+    )
+
+    # print('detrended_data: ', detrended_data.shape)
+    x_detrend_sym_asym = detrended_data.compute()
+
+    # x_detrend_sym_asym = x_detrend_sym_asym.transpose(*original_dims)
+
+    # print('coordinates: ', x_detrend_sym_asym.dims)
+    # print('size of x_roll_sym_asym: ', x_detrend_sym_asym.shape)
+
+    # 5. add taper
+    # using hanning window w[n] = 0.5 * (1 - cos(2*pi*n/(M-1))) to create split cosine bell taper
+    taper = split_hann_taper(seg_size=segsize, fraction=0.5)
+
+    # print('size of taper: ', np.shape(taper))
+
+    x_detrend_tap = x_detrend_sym_asym * taper  # time, lat, lon, segments
+    # x_detrend_asymtap = x_detrend_asym * taper
+
+    # 6. fourier transform within 2 steps 
+    # perform fft in longitude
+    lon_dim = x_detrend_tap.dims.index('lon')
+    lon_size = x_detrend_tap.shape[lon_dim]
+    # following ncl script, we normalize the fft coefficients with lon_size
+    fft_lon = np.fft.fft(x_detrend_tap, axis=lon_dim) / lon_size # time, lat, wavenumber, segments
+    # fft_lon_asym = np.fft.fft(x_detrend_asymtap, axis=lon_dim) / lon_size # time, lat, wavenumber, segments
+    # perform fft in segments
+    seg_dim = x_detrend_tap.dims.index('segments')
+    seg_size = x_detrend_tap.shape[seg_dim]
+    fft_lonseg = np.fft.fft(fft_lon, axis=seg_dim) / seg_size  # time, lat, wavenumber, frequency
+    # fft_lonseg_asym = np.fft.fft(fft_lon_asym, axis=seg_dim) / seg_size  # time, lat, wavenumber, frequency
+
+    fft_sym_asym = xr.DataArray(
+        data=fft_lonseg,
+        dims=("time","lat","wavenumber","frequency"),
+        coords={
+            "time": x_detrend_tap["time"],
+            "lat": x_detrend_tap["lat"],
+            "wavenumber": np.fft.fftfreq(lon_size, 1/lon_size),  # how many cycles along the equator 
+            "frequency": np.fft.fftfreq(seg_size, 1/spd),  # the frequency (day-1)
+        }
+    )
+
+    # 7. [time, lat, wavenumber, frequency]
+    # reorder coef matrix according to ncl script
+    fft_reorder = Hayashi(fft_sym_asym, segsize/spd)
+    # fft_asym_reorder = Hayashi(fft_asym, segsize/spd)
+    
+    # 8. average over all segments [wavenumber, frequency]
+    zsym = 2.0 * fft_reorder.isel(lat=fft_reorder.lat<0).mean(dim='time').sum(dim='lat').squeeze()
+    zsym.name = "power"
+    zasym = 2.0 * fft_reorder.isel(lat=fft_reorder.lat>0).mean(dim='time').sum(dim='lat').squeeze()
+    zasym.name = "power"
+
+    if sigtest:
+        # get power spectra for each segment for significance test [time, wavenumber, frequency]
+        zsym1 = 2.0 * fft_reorder.isel(lat=fft_reorder.lat<0).sum(dim='lat').squeeze()
+        zasym1 = 2.0 * fft_reorder.isel(lat=fft_reorder.lat>0).sum(dim='lat').squeeze()
+        return zsym.where(zsym['frequency']>0, drop=True), zasym.where(zasym['frequency']>0, drop=True), zsym1.where(zsym1['frequency']>0, drop=True), zasym1.where(zasym1['frequency']>0, drop=True)
+
+    else:
+        return zsym.where(zsym['frequency']>0, drop=True), zasym.where(zasym['frequency']>0, drop=True)
+
+
+def spacetime_power_runningavg_2d(data, segsize=96, noverlap=60, spd=1, lat_lim=15, remove_low=True, sigtest=False, window_time=5, window_lon=11):
+    """
+    Perform space-time spectral decomposition and return raw power spectrum following Wheeler-Kiladis approach.
+
+    data: an xarray DataArray to be analyzed; needs to have (time, lat, lon) dimensions.
+    segsize: integer (days) denoting the size of time samples that will be decomposed (typically about 96)
+    noverlap: integer (days) denoting the number of days of overlap from one segment to the next
+    spd: sampling rate, in "samples per day" (e.g. daily=1, 6-houry=4)
+    latitude_bounds: a tuple of (southern_extent, northern_extent) to reduce data size.
+
+    Method
+    ------------------
+        0. Remove the first three harmonics of annual cycle to prevent aliasing.
+        1. Subsample in latitude if latitude_bounds is specified.
+        2. Construct symmetric/antisymmetric array .
+        3. Construct overlapping window view of data.
+        4. Detrend the segments (remove linear trend).
+        5. Apply taper in time dimension of windows (aka segments).
+        6. Fourier transform
+        7. calculate the power.
+        8. average over all segments
+        9. sum the power over all latitudes.
+        
+    Notes
+    ---------------------------
+        Upon returning power, this should be comparable to "raw" spectra. 
+        Next step would be be to smooth with `smooth_wavefreq`, 
+        and divide raw spectra by smooth background to obtain "significant" spectral power.
+        
+    """
+
+    segsize = spd * segsize  # how many time steps included.
+    noverlap = spd * noverlap  
+
+    # select the interested section in data
+    # # NOTE: starting from negative values; if your dataset starts from positive latitudes, please revise the following line
+    # data1 = data.sel(lat=slice(-lat_lim, lat_lim))
+    # NOTE: starting from positive values; if your dataset starts from negative latitudes, please revise the following line
+    data1 = data.sel(lat=slice(lat_lim, -lat_lim))
+    # # Assuming lat is a coordinate in your xarray Dataset or DataArray
+    # latitude_values = data1.lat.values
+
+
+    # 0. remove low-frequency signals
+    if remove_low:
+        data2 = rmv_lowfreq(data1)
+    else:
+        data2 = data1
+
+    # 2. [time, lat(pos+neg), lon]
+    # lat<0: symmetric; lat>0: antisymmetric
+    data_sym_asym = decompose2SymAsym(data2)
+
+    # 3. 
+    data_sym_asym0 = data_sym_asym.rolling(time=segsize, min_periods=segsize).construct("segments").dropna('time')  # WK99 use 96-day window
+    # x_roll_asym0 = data_asym.rolling(time=segsize, min_periods=segsize).construct("segments").dropna('time')  # WK99 use 96-day window
+    
+    # set overlaps
+    x_roll_sym_asym = data_sym_asym0.isel(time=slice(None, None, segsize-noverlap))
+    # x_roll_asym = x_roll_asym0.isel(time=slice(None, None, segsize-noverlap))
+
+    seg_dim = x_roll_sym_asym.dims.index('segments')
+    # print('seg_dim: ' + str(seg_dim))
+
+
+    original_dims = x_roll_sym_asym.dims
+    x_roll_sym_asym = x_roll_sym_asym.chunk({'time': 1, 'lat': 'auto', 'lon': 'auto', 'segments': -1})
+
+    # apply running averages to each segment
+    x_roll_sym_asym = x_roll_sym_asym.rolling(segments=window_time, center=True, min_periods=1).mean().dropna('segments')
+
+    print('coordinates: ', x_roll_sym_asym.dims)
+    print('size of x_roll_sym_asym: ', x_roll_sym_asym.shape)
+
+    x_roll_sym_asym = x_roll_sym_asym.chunk(dict(segments=-1))
+
+    attached_k = window_lon - 1 
+    concat_arr = xr.concat([x_roll_sym_asym, x_roll_sym_asym.isel(lon=slice(0, attached_k))], dim='lon')
+    concat_arr = concat_arr.rolling(lon=window_lon, center=False, min_periods=1).mean()
+
+    rolled_arr = concat_arr.isel(lon=slice(attached_k, attached_k + x_roll_sym_asym.sizes['lon']))
+    rolled_arr = rolled_arr.assign_coords(lon=x_roll_sym_asym['lon'])
+    x_roll_sym_asym = rolled_arr
+    
+    def detrend_timeseries(ts):
+        time_nums = np.arange(ts.size)
+        coeffs = np.polyfit(time_nums, ts, 1)
+        trend = np.polyval(coeffs, time_nums)
+        return ts - trend
+
+    # Use apply_ufunc to apply the detrending
+    detrended_data = xr.apply_ufunc(
+        detrend_timeseries,
+        x_roll_sym_asym,  # Your Dask-backed DataArray
+        input_core_dims=[['segments']],
+        output_core_dims=[['segments']],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[x_roll_sym_asym.dtype]
+    )
+
+    # print('detrended_data: ', detrended_data.shape)
+    x_detrend_sym_asym = detrended_data.compute()
+
+    # x_detrend_sym_asym = x_detrend_sym_asym.transpose(*original_dims)
+
+    # print('coordinates: ', x_detrend_sym_asym.dims)
+    # print('size of x_roll_sym_asym: ', x_detrend_sym_asym.shape)
+
+    # 5. add taper
+    # using hanning window w[n] = 0.5 * (1 - cos(2*pi*n/(M-1))) to create split cosine bell taper
+    taper = split_hann_taper(seg_size=segsize, fraction=0.5)
+
+    # print('size of taper: ', np.shape(taper))
+
+    x_detrend_tap = x_detrend_sym_asym * taper  # time, lat, lon, segments
+    # x_detrend_asymtap = x_detrend_asym * taper
+
+    # 6. fourier transform within 2 steps 
+    # perform fft in longitude
+    lon_dim = x_detrend_tap.dims.index('lon')
+    lon_size = x_detrend_tap.shape[lon_dim]
+    # following ncl script, we normalize the fft coefficients with lon_size
+    fft_lon = np.fft.fft(x_detrend_tap, axis=lon_dim) / lon_size # time, lat, wavenumber, segments
+    # fft_lon_asym = np.fft.fft(x_detrend_asymtap, axis=lon_dim) / lon_size # time, lat, wavenumber, segments
+    # perform fft in segments
+    seg_dim = x_detrend_tap.dims.index('segments')
+    seg_size = x_detrend_tap.shape[seg_dim]
+    fft_lonseg = np.fft.fft(fft_lon, axis=seg_dim) / seg_size  # time, lat, wavenumber, frequency
+    # fft_lonseg_asym = np.fft.fft(fft_lon_asym, axis=seg_dim) / seg_size  # time, lat, wavenumber, frequency
+
+    fft_sym_asym = xr.DataArray(
+        data=fft_lonseg,
+        dims=("time","lat","wavenumber","frequency"),
+        coords={
+            "time": x_detrend_tap["time"],
+            "lat": x_detrend_tap["lat"],
+            "wavenumber": np.fft.fftfreq(lon_size, 1/lon_size),  # how many cycles along the equator 
+            "frequency": np.fft.fftfreq(seg_size, 1/spd),  # the frequency (day-1)
+        }
+    )
+
+    # 7. [time, lat, wavenumber, frequency]
+    # reorder coef matrix according to ncl script
+    fft_reorder = Hayashi(fft_sym_asym, segsize/spd)
+    # fft_asym_reorder = Hayashi(fft_asym, segsize/spd)
+    
+    # 8. average over all segments [wavenumber, frequency]
+    zsym = 2.0 * fft_reorder.isel(lat=fft_reorder.lat<0).mean(dim='time').sum(dim='lat').squeeze()
+    zsym.name = "power"
+    zasym = 2.0 * fft_reorder.isel(lat=fft_reorder.lat>0).mean(dim='time').sum(dim='lat').squeeze()
+    zasym.name = "power"
+
+    if sigtest:
+        # get power spectra for each segment for significance test [time, wavenumber, frequency]
+        zsym1 = 2.0 * fft_reorder.isel(lat=fft_reorder.lat<0).sum(dim='lat').squeeze()
+        zasym1 = 2.0 * fft_reorder.isel(lat=fft_reorder.lat>0).sum(dim='lat').squeeze()
+        return zsym.where(zsym['frequency']>0, drop=True), zasym.where(zasym['frequency']>0, drop=True), zsym1.where(zsym1['frequency']>0, drop=True), zasym1.where(zasym1['frequency']>0, drop=True)
+
+    else:
+        return zsym.where(zsym['frequency']>0, drop=True), zasym.where(zasym['frequency']>0, drop=True)

@@ -31,11 +31,12 @@ with open("/pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/config/base.yaml", "
     base_config = yaml.safe_load(f)
 
 # --- modify the base config for the experiment ---
-base_config["model"]["cnn"]["layer_num"] = 2
-base_config["model"]["mlp"]["layer_num"] = 1
 base_config["dataset_type"] = "hov"
 base_config["data"]["memory_last"] = 95  
 base_config["data"]["lat_range"] = 10
+
+base_config["model"]["cnn"]["layer_num"] = 2
+base_config["model"]["mlp"]["layer_num"] = 2
 # --- store the config under the experiment folder ---
 with open('hpo.yaml', 'w') as f:
     yaml.dump(base_config, f)
@@ -166,7 +167,7 @@ def objective(trial):
 # Run the Optuna study
 # =====================================================================
 if __name__ == "__main__":
-    pruner = optuna.pruners.MedianPruner(n_warmup_steps=5)
+    pruner = optuna.pruners.MedianPruner(n_warmup_steps=3)
 
     try:
         study = optuna.load_study(
@@ -184,7 +185,7 @@ if __name__ == "__main__":
         )
 
     # Calculate remaining trials
-    n_total = 200 
+    n_total = 100 
     # Count completed trials
     n_completed = len(study.trials)
     # Skip if no trials are left
@@ -195,7 +196,7 @@ if __name__ == "__main__":
     # Adjust number of trials for this worker
     n_trials_remaining = n_total - n_completed
 
-    n_parallel = 4  # Number of parallel workers
+    n_parallel = 1  # Number of parallel workers
     n_trials_this_worker = ceil(n_trials_remaining / n_parallel)
     print(f"[INFO] Running {n_trials_this_worker} trials on this worker.")
 

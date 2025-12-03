@@ -1,0 +1,68 @@
+data:
+  dataflg: raw
+  grid_res: 2
+  input_path:
+  - /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/raw/olr.day.noaa.2x2.nc
+  input_vars:
+  - olr
+  lat_range: 10
+  lead: 35
+  memory_last: 95
+  residual: true
+  target_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/data/target/noaa/ROMI_NOAA_1979to2022.nc
+  target_vars:
+  - ROMI
+  test_end: '2021-12-31'
+  test_start: '2010-01-01'
+  train_end: '2009-12-31'
+  train_start: '1979-05-01'
+  transform: null
+  val_end: '2015-12-31'
+  val_start: '2010-01-01'
+  window_len: 11
+dataset_type: hov_sm
+exp_num: '7'
+hidden_layers_str: '256_256'
+kernel_size_str: '17_137'
+model:
+  cnn:
+    batch_norm: false
+    channels_list:
+    - 4
+    - 16
+    channels_list_str: '4_16'
+    dropout: 0.1
+    input_channel_num: 1
+    input_map_size: 17280
+    kernel_size:
+    - 17
+    - 137
+    layer_num: 2
+    name: CNN
+    nlon: 180
+    num_filters_enc: null
+    padding: same
+    stride: 1
+  mlp:
+    dropout: 0.3585820637055652
+    hidden_layers:
+    - 256
+    - 256
+    layer_num: 2
+    output_size: 72
+  name: CNN_MLP
+model_save_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/modelcheckpoints/hov_sm11_resTrue/CNN_MLP/exp7/OLR_10deg_lead35_lr5.290161491543705e-05_batch8_dropout0.3585820637055652_ch_4_16_ksize_17_137_hidden_256_256_opt_SGD_mom0.9_wd3.2314201332519696e-05_mem95.pth
+prediction_save_path: /pscratch/sd/l/linyaoly/MJO_ML_2025/script/model/predictions/hov_sm11_resTrue/CNN_MLP/exp7/OLR_10deg_lead35_lr5.290161491543705e-05_batch8_dropout0.3585820637055652_ch_4_16_ksize_17_137_hidden_256_256_opt_SGD_mom0.9_wd3.2314201332519696e-05_mem95.nc
+pretrained_path: null
+training:
+  batch_size: 8
+  criterion: MSELoss
+  early_stopping_patience: 10
+  epochs: 100
+  learning_rate: 5.290161491543705e-05
+  momentum: 0.9
+  optimizer: SGD
+  scheduler:
+    T_max: 100
+    type: CosineAnnealingLR
+  weight_decay: 3.2314201332519696e-05

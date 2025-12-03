@@ -5,7 +5,7 @@
 
 # source activate python
 source $(conda info --base)/etc/profile.d/conda.sh
-conda activate python
+conda activate mlpy
 
 for i in {1..4}; do
     srun --exclusive -N1 -n1 --gpus=1 python hpo.py &

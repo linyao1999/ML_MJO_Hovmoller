@@ -18,6 +18,8 @@ data:
   grid_res: 2  # grid spacing in degrees
   transform: null
   memory_last: 0  # for datasets other than map*
+  window_len: 11 # for hov_sm
+  residual: false
 
 model:
   name: "CNN_MLP"
