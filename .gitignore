@@ -9,3 +9,4 @@ debug*
 *.db 
 *.pdf
 *.npy
+/old/
